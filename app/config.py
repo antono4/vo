@@ -26,6 +26,7 @@ DURATION_MIN = 4
 DURATION_MAX = 30
 DURATION_DEFAULT = 30
 LEGACY_TOOL_CAP = 15  # informational only, never enforced
+MAX_COUNT = int(os.getenv("MAX_COUNT", "5"))
 
 # --- Generation output ---
 FPS = int(os.getenv("VIDEO_FPS", "24"))
