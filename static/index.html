@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Video Maker — BBU CHANNEL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">🎬</div>
+      <div>
+        <h1>AI Video Maker</h1>
+        <p>Ditenagai <strong>Seedance 2.5</strong> · durasi asli 4–30 detik</p>
+      </div>
+    </div>
+    <div class="badges">
+      <span class="badge" id="badge-model">model: seedance_2.5</span>
+      <span class="badge ok" id="badge-engine">engine: memuat…</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ============ FORM ============ -->
+    <section class="panel form-panel">
+      <h2 class="panel-title">Buat Video Baru</h2>
+
+      <label class="field">
+        <span class="label">Deskripsi video</span>
+        <textarea id="prompt" rows="4"
+          placeholder="Contoh: kucing berlari di pantai saat matahari terbenam, sinematik, gerakan kamera lambat"></textarea>
+        <small class="hint">Tulis bebas dalam Bahasa Indonesia. Prompt akan diterjemahkan ke Inggris untuk model.</small>
+      </label>
+
+      <div class="field">
+        <span class="label">Durasi <b id="duration-val">30</b> detik</span>
+        <input type="range" id="duration" min="4" max="30" value="30" step="1" />
+        <div class="range-marks"><span>4s</span><span>30s (maksimum asli)</span></div>
+        <small class="hint" id="duration-hint">Rentang asli model: 4–30 detik. Cap lama 15 detik tidak dipakai.</small>
+      </div>
+
+      <div class="field">
+        <span class="label">Rasio</span>
+        <div class="chips" id="ratio-chips"></div>
+        <small class="hint" id="ratio-hint">Otomatis terdeteksi dari deskripsi (mis. "tiktok" → 9:16).</small>
+      </div>
+
+      <div class="field">
+        <span class="label">Jumlah video</span>
+        <div class="chips" id="count-chips"></div>
+      </div>
+
+      <div class="field">
+        <span class="label">Referensi gambar <em>(opsional · image-to-video)</em></span>
+        <div id="dropzone" class="dropzone">
+          <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp" multiple hidden />
+          <p>Klik atau seret gambar ke sini</p>
+          <small>PNG / JPG / WEBP · maks 25MB</small>
+        </div>
+        <div id="thumbs" class="thumbs"></div>
+      </div>
+
+      <label class="toggle" id="ai-toggle-wrap">
+        <input type="checkbox" id="use-ai" />
+        <span>Gunakan model AI asli (ModelArk) — butuh API key</span>
+      </label>
+
+      <button id="generate" class="btn-primary">✨ Generate Video</button>
+      <div id="notice" class="notice hidden"></div>
+    </section>
+
+    <!-- ============ RESULTS ============ -->
+    <section class="panel results-panel">
+      <div class="results-head">
+        <h2 class="panel-title">Hasil Video</h2>
+        <div class="pipeline" id="pipeline">
+          <span class="dot"></span><span id="pipeline-text">pipeline siap</span>
+        </div>
+      </div>
+      <div id="results" class="results">
+        <div class="empty">
+          <div class="empty-emoji">🎞️</div>
+          <p>Belum ada video. Isi deskripsi lalu klik <b>Generate Video</b>.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <pre id="cta"></pre>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

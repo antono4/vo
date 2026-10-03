@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+data/outputs/*
+data/uploads/*
+data/pipeline.json
+data/pipeline.log
+!data/outputs/.gitkeep
+!data/uploads/.gitkeep
+*.mp4
+.DS_Store
