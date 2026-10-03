@@ -262,7 +262,18 @@ def enhance_prompt(user_prompt: str, *, model: str | None = None) -> str:
 
 
 def generate_image(prompt: str, dest: str, *, aspect: str = "16:9", seed: int | None = None,
-                   realistic: bool = True) -> ImageResult:
+                   realistic: bool | None = None) -> ImageResult:
+    """Fetch a free AI image for the prompt and save it to disk.
+
+    The prompt is wrapped in photographic quality tags (unless `realistic=False`
+    or `config.REALISM` is disabled) and the requested size is clamped to the free
+    tier's cap, so the returned still actually looks like footage rather than a
+    flat illustration.
+    """
+    from pathlib import Path
+
+    use_realism = config.REALISM if realistic is None else realistic
+    request_prompt = realism_prompt(prompt, aspect=aspect) if use_realism else prompt
     """Fetch a free AI image for the prompt and save it to disk.
 
     The prompt is wrapped in photographic quality tags (unless `realistic=False`)
