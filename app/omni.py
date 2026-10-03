@@ -55,41 +55,78 @@ def _even(n: float) -> int:
     return v - (v % 2)
 
 
+def _smoothstep(T: str, span: float) -> str:
+    """Eased 0..1 ramp over `span` seconds starting at 0.
+
+    A linear ramp reads as a mechanical zoom; easing in and out is what makes a
+    move feel like a camera operator starting and stopping. `T` is the clip time
+    expression (frame counter / fps).
+    """
+    p = f"min({T}/{span:.4f},1)"
+    return f"({p}*{p}*(3-2*{p}))"
+
+
 def camera_filter(camera: str, width: int, height: int, fps: int) -> str:
-    """Zoom/pan expression for one shot.
+    """Per-shot motion + photographic grade.
 
     `zoompan` does not expose a `t` variable, so clip time is derived from the
-    output frame counter: `T = on / fps`. A 6% travel reads as a deliberate
-    camera move without exposing the frame edges; the input is upscaled 1.6x
-    first so the moving crop always has coverage.
+    output frame counter: `T = on / fps`. Moves are eased (see `_smoothstep`) and
+    travel ~10% so they read as deliberate but never expose the frame edges; the
+    input is upscaled first so the moving crop always has coverage.
+
+    The grade chain afterwards is what sells the "real footage" look: a
+    filmic curve, local contrast (unsharp), grain and a soft vignette. Without
+    it the massively upscaled AI stills look obviously synthetic.
     """
     cam = (camera or "").lower()
     T = f"on/{fps}"
-    z = f"1+0.06*min({T}/4,1)"
+    span = 4.0
+    e = _smoothstep(T, span)
+    z = f"1+0.10*{e}"
     if "pan" in cam or "orbit" in cam:
-        x = f"(iw-iw/zoom)*(0.5+0.5*min({T}/4,1))"
+        x = f"(iw-iw/zoom)*(0.5+0.5*{e})"
         y = "ih/2-(ih/zoom/2)"
     elif "crane" in cam or "rise" in cam:
         x = "iw/2-(iw/zoom/2)"
-        y = f"(ih-ih/zoom)*(1-min({T}/4,1))"
+        y = f"(ih-ih/zoom)*(1-{e})"
     elif "pull" in cam or "back" in cam or "reveal" in cam:
-        z = f"1.06-0.06*min({T}/4,1)"
+        z = f"1.10-0.10*{e}"
         x = "iw/2-(iw/zoom/2)"
         y = "ih/2-(ih/zoom/2)"
     elif "drift" in cam or "handheld" in cam:
-        z = "1.05"
-        x = f"(iw-iw/zoom)*(0.5+0.02*sin({T}*1.5))"
-        y = f"(ih-ih/zoom)*(0.5+0.02*cos({T}*1.3))"
+        z = "1.06"
+        x = f"(iw-iw/zoom)*(0.5+0.03*sin({T}*1.5))"
+        y = f"(ih-ih/zoom)*(0.5+0.03*cos({T}*1.3))"
     else:  # push-in (default)
         x = "iw/2-(iw/zoom/2)"
         y = "ih/2-(ih/zoom/2)"
-    return (
-        f"scale={_even(width * 1.6)}:{_even(height * 1.6)}"
-        f":force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,"
-        f"zoompan=z='{z}':x='{x}':y='{y}':d=1:s={width}x{height}:fps={fps},"
-        f"eq=saturation=1.14:contrast=1.07:brightness=0.01,format=yuv420p,"
-        f"setsar=1"
-    )
+
+    chain = [
+        f"scale={_even(width * 2)}:{_even(height * 2)}"
+        f":force_original_aspect_ratio=increase:flags={config.REALISM_UPSCALE}",
+        f"crop={width}:{height}",
+        "setsar=1",
+        f"zoompan=z='{z}':x='{x}':y='{y}':d=1:s={width}x{height}:fps={fps}",
+    ]
+    chain.extend(_grade_filters())
+    chain.append("format=yuv420p")
+    chain.append("setsar=1")
+    return ",".join(chain)
+
+
+def _grade_filters() -> list[str]:
+    """Photographic grade applied to every shot (shared with the classic engine)."""
+    return renderer.grade_filters()
+
+
+def _xfade_transition(i: int) -> str:
+    """Pick a dissolve-family transition for join `i`.
+
+    Hard wipes look like a slideshow, so joins alternate between several soft
+    dissolve/wipe flavours to keep long sequences from feeling repetitive.
+    """
+    options = ["fade", "dissolve", "smoothleft", "fadeblack", "smoothright"]
+    return options[i % len(options)]
 
 
 def segment_geometry(duration: int, n: int) -> tuple[float, float, float]:
@@ -189,7 +226,7 @@ def build_command(
         for i in range(1, n):
             out = f"x{i}"
             parts.append(
-                f"[{prev}][v{i}]xfade=transition=fade"
+                f"[{prev}][v{i}]xfade=transition={_xfade_transition(i)}"
                 f":duration={xfade:.3f}:offset={cut * i:.3f}[{out}]"
             )
             prev = out
@@ -215,13 +252,15 @@ def build_command(
         "-map", "[aout]",
         "-t", str(duration),
         "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "21",
+        "-preset", "medium",
+        "-crf", "19",
         "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
         "-c:a", "aac",
         "-b:a", "128k",
         "-shortest",
+        "-metadata", f"title={title}",
+        "-metadata", f"comment=AI Video Maker (Omni-lite) | {subtitle}",
         str(output),
     ]
     return cmd

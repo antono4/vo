@@ -97,7 +97,18 @@ FREE_AI_CHAT_UPSTREAMS = [
     if u.strip()
 ]
 FREE_AI_MODELS = ["qwen3.8-27b", "gpt-oss-20b", "qwen3-8b"]
-FREE_AI_IMAGE_ASPECT = os.getenv("FREE_AI_IMAGE_ASPECT", "1:1")
+FREE_AI_IMAGE_ASPECT = os.getenv("FREE_AI_IMAGE_ASPECT", "16:9")
+# The free image tier is capped at 768px on its longest edge (a 768x768 request
+# succeeds, 1024x1024 and 1280x720 are rejected with HTTP 402) and rate-limits
+# bursts, so the longest requestable edge and the delay between requests are
+# configurable.
+FREE_AI_IMAGE_MAX_EDGE = int(os.getenv("FREE_AI_IMAGE_MAX_EDGE", "768"))
+FREE_AI_IMAGE_DELAY = float(os.getenv("FREE_AI_IMAGE_DELAY", "1.0"))
+FREE_AI_IMAGE_RETRIES = int(os.getenv("FREE_AI_IMAGE_RETRIES", "2"))
+FREE_AI_IMAGE_BACKOFF = float(os.getenv("FREE_AI_IMAGE_BACKOFF", "3.0"))
+# After a 402 the throttled endpoint is skipped for this long, so a multi-shot
+# job fails over to the lower-resolution endpoint instead of stalling on retries.
+FREE_AI_IMAGE_COOLDOWN = float(os.getenv("FREE_AI_IMAGE_COOLDOWN", "25"))
 
 # --- Generation engine ---
 # 'classic'  : one AI image + Ken Burns + title/watermark (the original engine)
@@ -113,6 +124,19 @@ OMNI_SCENE_SECONDS = int(os.getenv("OMNI_SCENE_SECONDS", "5"))
 OMNI_MAX_SCENES = int(os.getenv("OMNI_MAX_SCENES", "6"))
 OMNI_XFADE_SECONDS = float(os.getenv("OMNI_XFADE_SECONDS", "0.8"))
 OMNI_TITLE_SECONDS = float(os.getenv("OMNI_TITLE_SECONDS", "3.0"))
+
+# --- Realism (photographic look) ---
+# Applied to every shot. These turn the flat, upscaled AI stills into
+# something that reads as camera footage: a gentle film curve, a touch of
+# local contrast, film grain and a soft vignette.
+REALISM = os.getenv("REALISM", "1") not in ("0", "false", "False")
+REALISM_GRAIN = float(os.getenv("REALISM_GRAIN", "7"))       # noise strength (0 disables)
+REALISM_VIGNETTE = float(os.getenv("REALISM_VIGNETTE", "0.55"))
+REALISM_SHARPEN = float(os.getenv("REALISM_SHARPEN", "1.0"))  # unsharp amount
+REALISM_UPSCALE = os.getenv("REALISM_UPSCALE", "lanczos")
+# Blend a small amount of the previous frame back in so stills gain subtle
+# temporal texture even within a single shot (0 disables).
+REALISM_TEMPORAL = float(os.getenv("REALISM_TEMPORAL", "0.12"))
 
 # --- Real Gemini Omni Flash provider (https://ai.google.dev/gemini-api/docs/omni) ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")

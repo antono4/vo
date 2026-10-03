@@ -31,12 +31,12 @@ _CAMERA_MOVES = [
 # Ordered fallback beats; each is appended to the base idea when the LLM is
 # unavailable. Kept generic enough to fit nature, city, product and people.
 _BEATS = [
-    "wide establishing shot",
-    "medium shot of the main subject",
-    "close-up detail",
-    "different angle, wider context",
-    "atmospheric wide shot",
-    "final beauty shot",
+    "wide establishing shot, natural ambient light",
+    "medium shot of the main subject, shallow depth of field",
+    "macro close-up detail, soft bokeh background",
+    "over-the-shoulder angle, wider context, golden hour light",
+    "atmospheric wide shot, volumetric light and haze",
+    "final beauty shot, warm rim light, high dynamic range",
 ]
 
 
@@ -79,7 +79,7 @@ def heuristic_plan(prompt: str, count: int) -> ScenePlan:
         camera = _CAMERA_MOVES[i % len(_CAMERA_MOVES)]
         scenes.append(
             Scene(
-                prompt=f"{base}, {beat}, cinematic lighting, high detail",
+                prompt=f"{base}, {beat}",
                 camera=camera,
                 index=i,
             )
@@ -122,11 +122,14 @@ def plan_scenes(prompt: str, duration: int, *, model: str | None = None,
         return heuristic_plan(prompt, count)
 
     system = (
-        "You are a storyboard artist for an AI video model. Split the user's idea "
-        f"into exactly {count} consecutive shots that together read as one coherent "
-        "video. Return ONLY JSON: {\"scenes\":[{\"prompt\":\"...\",\"camera\":\"...\"}]}. "
-        "Each prompt must be one vivid English sentence describing subject, setting "
-        "and lighting; each camera must name a camera move. No markdown, no preamble."
+        "You are a storyboard artist for a photorealistic AI video model. Split the "
+        f"user's idea into exactly {count} consecutive shots that together read as one "
+        "coherent, live-action video. Return ONLY JSON: "
+        "{\"scenes\":[{\"prompt\":\"...\",\"camera\":\"...\"}]}. "
+        "Each prompt must be one vivid English sentence naming the subject, action, "
+        "setting, lighting and lens feel (e.g. 'shallow depth of field', 'golden hour', "
+        "'35mm film'), as if describing real camera footage rather than an illustration. "
+        "Each camera must name a camera move. No markdown, no preamble."
     )
     try:
         result = free_ai.chat(

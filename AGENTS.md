@@ -68,7 +68,19 @@ Rendering requires system `ffmpeg` (`sudo apt-get install -y ffmpeg`).
   the reported engine always matches the one that ran.
 - **Omni duration maths:** `n` shots of `seg` overlapped by `xfade` must satisfy
   `n*seg - (n-1)*xfade == duration` (`omni.segment_geometry`).
-- Long renders (30s @ 1080p) take ~40s; the frontend polls `/api/jobs/{id}`.
+- **Free image tier caps at 768px:** pollinations rejects a long edge above 768
+  with HTTP 402, and bursts 402 too. `free_ai.image_size()` clamps every request
+  (never ask for 1280x720 — it fails), `_fetch_image_with_retry()` waits/retries,
+  and `_ENDPOINT_COOLDOWN` skips a throttled endpoint so multi-shot jobs fail
+  over to a0.dev instead of stalling. `_reset_image_cooldown` (conftest) clears
+  that process-global state between tests.
+- **Realism is a first-class feature:** `renderer.grade_filters()` (curves +
+  unsharp + tmix + grain + vignette) is shared by `omni` and `classic`;
+  `free_ai.realism_prompt()` wraps scene prompts in photographic tags. Both are
+  gated by `config.REALISM`. Camera moves are eased via `omni._smoothstep` — a
+  linear zoom reads as mechanical.
+- Long renders (30s @ 1080p, 6 shots) take ~2 min (image fetches dominate); the
+  frontend polls `/api/jobs/{id}`.
 - **Free AI is optional:** `FREE_AI_ENABLED=0` forces offline mode. Network
   failures must never fail a job — `jobs._prepare_prompt()` catches them and
   keeps the original prompt. Tests stub `free_ai._read` to stay offline.

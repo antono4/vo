@@ -80,6 +80,31 @@ def _dimensions(ratio: str) -> tuple[int, int]:
     return config.RATIO_DIMENSIONS.get(ratio, config.RATIO_DIMENSIONS[config.DEFAULT_RATIO])
 
 
+def grade_filters() -> list[str]:
+    """Photographic grade shared by every engine that animates AI stills.
+
+    Massively upscaled AI images look flat and synthetic on their own. A film
+    curve, local contrast, subtle temporal blend, grain and a soft vignette are
+    what make the result read as camera footage rather than a moving picture.
+    """
+    if not config.REALISM:
+        return ["eq=saturation=1.12:contrast=1.06"]
+    grade = [
+        "curves=preset=medium_contrast",
+        "eq=contrast=1.06:saturation=1.12:brightness=0.005:gamma=0.99",
+        f"unsharp=5:5:{config.REALISM_SHARPEN}:5:5:0.0",
+    ]
+    if config.REALISM_TEMPORAL > 0:
+        grade.append(
+            f"tmix=frames=2:weights='{1 - config.REALISM_TEMPORAL} {config.REALISM_TEMPORAL}'"
+        )
+    if config.REALISM_GRAIN > 0:
+        grade.append(f"noise=alls={config.REALISM_GRAIN}:allf=t+u")
+    if config.REALISM_VIGNETTE > 0:
+        grade.append(f"vignette=angle=PI*{config.REALISM_VIGNETTE / 2:.4f}")
+    return grade
+
+
 def _write_textfile(tmpdir: Path, name: str, text: str) -> Path:
     p = tmpdir / name
     p.write_text(text, encoding="utf-8")
@@ -133,9 +158,9 @@ def build_command(
     if image_path is not None:
         cmd += ["-loop", "1", "-t", str(duration), "-i", str(image_path)]
         base = (
-            f"scale={width}:{height}:force_original_aspect_ratio=increase,"
-            f"crop={width}:{height},setsar=1,"
-            f"eq=saturation=1.12:contrast=1.06,format=yuv420p"
+            f"scale={width}:{height}:force_original_aspect_ratio=increase"
+            f":flags={config.REALISM_UPSCALE},"
+            f"crop={width}:{height},setsar=1"
         )
         motion = (
             f"zoompan=z='min(zoom+0.0006,1.20)'"
@@ -168,9 +193,14 @@ def build_command(
         f"anoisesrc=d={duration}:c=pink:r=48000:a=0.015",
     ]
 
+    # The grade only makes sense for real stills; the procedural gradient
+    # background has its own look.
+    graded = list(grade_filters()) if image_path is not None else []
     video_filters = ",".join([
         base,
         motion,
+        *graded,
+        "format=yuv420p",
         _drawtext(title_file, FONT_BOLD, f"h/12", "h*0.38",
                   box=True, enable="lt(t,4)"),
         _drawtext(sub_file, FONT_REGULAR, f"h/30", "h*0.52",
