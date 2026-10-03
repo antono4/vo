@@ -31,6 +31,21 @@
     aiToggle.disabled = !health.ai_provider_available;
     if (!health.ai_provider_available) $("ai-toggle-wrap").classList.add("disabled");
 
+    const freeAi = health.free_ai || (meta.free_ai || {});
+    state.freeAi = freeAi;
+    state.freeAiModel = freeAi.default_model || "qwen3.8-27b";
+    const freeToggle = $("use-free-ai");
+    freeToggle.checked = !!freeAi.enabled;
+    freeToggle.disabled = !freeAi.enabled;
+    if (!freeAi.enabled) {
+      $("free-ai-toggle-wrap").classList.add("disabled");
+      $("free-ai-model-field").style.display = "none";
+    } else {
+      renderFreeAiModels(freeAi.models || [], state.freeAiModel);
+      $("free-ai-hint").textContent =
+        `Sumber: MarbelAIv2.1 · ${(freeAi.upstreams || []).length} provider gratis · tanpa API key.`;
+    }
+
     $("cta").textContent = meta.branding.cta;
     renderRatioChips(meta.ratios, meta.default_ratio);
     renderCountChips(meta.max_count);
@@ -60,6 +75,26 @@
       wrap.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
       chip.classList.add("active");
       state.ratio = chip.dataset.ratio;
+    });
+  }
+
+  function renderFreeAiModels(models, defaultModel) {
+    const wrap = $("free-ai-models");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    models.forEach((m) => {
+      const c = document.createElement("div");
+      c.className = "chip" + (m === defaultModel ? " active" : "");
+      c.dataset.model = m;
+      c.textContent = m;
+      wrap.appendChild(c);
+    });
+    wrap.addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip) return;
+      wrap.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+      state.freeAiModel = chip.dataset.model;
     });
   }
 
@@ -155,6 +190,8 @@
       count: state.count,
       images: state.images.map((i) => i.url),
       use_ai: $("use-ai").checked,
+      use_free_ai: $("use-free-ai") ? $("use-free-ai").checked : false,
+      ai_model: state.freeAiModel || null,
     };
 
     try {

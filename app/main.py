@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import ai_provider, config, jobs, pipeline, prompt_utils
+from . import ai_provider, config, free_ai, jobs, pipeline, prompt_utils
 
 
 def _recover_interrupted_jobs() -> None:
@@ -37,6 +37,8 @@ def _recover_interrupted_jobs() -> None:
             mode=job["mode"],
             image_path=image_path,
             image_urls=job.get("image_urls"),
+            use_free_ai=job.get("use_free_ai", True),
+            ai_model=job.get("ai_model"),
         )
 
 
@@ -64,6 +66,8 @@ class GenerateRequest(BaseModel):
     count: int = Field(1, ge=1, le=4)
     images: list[str] = Field(default_factory=list)
     use_ai: bool = False
+    use_free_ai: bool = True
+    ai_model: str | None = None
     title: str | None = None
 
 
@@ -76,6 +80,13 @@ def health() -> dict:
         "legacy_tool_cap": config.LEGACY_TOOL_CAP,
         "render_engine": config.RENDER_ENGINE,
         "ai_provider_available": ai_provider.available(),
+        "free_ai": {
+            "enabled": free_ai.enabled(),
+            "default_model": config.FREE_AI_CHAT_MODEL,
+            "models": config.FREE_AI_MODELS,
+            "upstreams": config.FREE_AI_CHAT_UPSTREAMS,
+            "source": "MarbelAIv2.1",
+        },
         "active_jobs": jobs.active_count(),
     }
 
@@ -95,6 +106,15 @@ def meta() -> dict:
         "default_ratio": config.DEFAULT_RATIO,
         "max_count": 4,
         "modes": ["text_to_video", "image_to_video"],
+        "free_ai": {
+            "enabled": free_ai.enabled(),
+            "default_model": config.FREE_AI_CHAT_MODEL,
+            "models": config.FREE_AI_MODELS,
+            "note": (
+                "Kemampuan AI gratis dari MarbelAIv2.1: prompt enhancement + "
+                "gambar referensi AI (keyless) yang dianimasikan oleh renderer."
+            ),
+        },
         "branding": config.BBU,
     }
 
@@ -141,6 +161,11 @@ def generate(req: GenerateRequest) -> JSONResponse:
             title=req.title or "",
             filename=filename,
         )
+        pipeline.update(
+            jid,
+            use_free_ai=req.use_free_ai,
+            ai_model=req.ai_model or config.FREE_AI_CHAT_MODEL,
+        )
         image_path = None
         if req.images:
             image_path = config.UPLOAD_DIR / Path(req.images[0]).name
@@ -154,6 +179,8 @@ def generate(req: GenerateRequest) -> JSONResponse:
             image_path=image_path,
             image_urls=req.images or None,
             use_ai=req.use_ai,
+            use_free_ai=req.use_free_ai,
+            ai_model=req.ai_model,
         )
         created.append({"job_id": jid, "filename": filename, "mode": mode})
 
@@ -204,6 +231,8 @@ def retry_job(job_id: str) -> dict:
         mode=job["mode"],
         image_path=image_path,
         image_urls=job.get("image_urls"),
+        use_free_ai=job.get("use_free_ai", True),
+        ai_model=job.get("ai_model"),
     )
     return {"job_id": job_id, "status": "pending"}
 

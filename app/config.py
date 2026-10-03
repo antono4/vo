@@ -78,3 +78,22 @@ RENDER_ENGINE = os.getenv("RENDER_ENGINE", "procedural")
 MODELARK_API_KEY = os.getenv("MODELARK_API_KEY")
 MODELARK_BASE_URL = os.getenv("MODELARK_BASE_URL", "https://ark.ap-southeast.bytepluses.com/api/v3")
 MODELARK_MODEL_ID = os.getenv("MODELARK_MODEL_ID", "dreamina-seedance-2-5")
+
+# --- Free AI capabilities (ported from MarbelAIv2.1) ---
+# Keyless, OpenAI-compatible providers used to (a) enhance the prompt and
+# (b) generate a real reference image that the ffmpeg renderer animates.
+# Enabled by default; set FREE_AI_ENABLED=0 to force fully-offline behavior.
+FREE_AI_ENABLED = os.getenv("FREE_AI_ENABLED", "1") not in ("0", "false", "False")
+FREE_AI_TIMEOUT = int(os.getenv("FREE_AI_TIMEOUT", "30"))
+FREE_AI_CHAT_MODEL = os.getenv("FREE_AI_CHAT_MODEL", "qwen3.8-27b")
+FREE_AI_CHAT_UPSTREAMS = [
+    u.strip()
+    for u in os.getenv(
+        "FREE_AI_CHAT_UPSTREAMS",
+        "https://hermes.ai.unturf.com,https://qwen.ai.unturf.com,"
+        "https://text.pollinations.ai,https://api.free.ai",
+    ).split(",")
+    if u.strip()
+]
+FREE_AI_MODELS = ["qwen3.8-27b", "gpt-oss-20b", "qwen3-8b"]
+FREE_AI_IMAGE_ASPECT = os.getenv("FREE_AI_IMAGE_ASPECT", "1:1")

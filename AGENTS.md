@@ -32,6 +32,9 @@ Rendering requires system `ffmpeg` (`sudo apt-get install -y ffmpeg`).
   `scripts/pipeline_tracker.py`).
 - `app/jobs.py` — background worker + auto-retry.
 - `app/ai_provider.py` — optional BytePlus ModelArk (Seedance 2.5) adapter.
+- `app/free_ai.py` — keyless free AI ported from MarbelAIv2.1: multi-provider
+  chat (prompt enhancement) and free image generation, with sequential
+  failover. All calls are best-effort and degrade to offline behavior.
 - `app/main.py` — FastAPI endpoints; lifespan recovers interrupted jobs.
 
 ## Conventions / gotchas
@@ -47,3 +50,6 @@ Rendering requires system `ffmpeg` (`sudo apt-get install -y ffmpeg`).
 - ffmpeg's `drawtext` requires `textfile=` with the text written to disk
   (escaping inline text with special characters is brittle).
 - Long renders (30s @ 1080p) take ~40s; the frontend polls `/api/jobs/{id}`.
+- **Free AI is optional:** `FREE_AI_ENABLED=0` forces offline mode. Network
+  failures must never fail a job — `jobs._prepare_prompt()` catches them and
+  keeps the original prompt. Tests stub `free_ai._read` to stay offline.
