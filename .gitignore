@@ -10,4 +10,5 @@ data/pipeline.log
 !data/outputs/.gitkeep
 !data/uploads/.gitkeep
 *.mp4
+server.log
 .DS_Store

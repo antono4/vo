@@ -17,6 +17,8 @@ behavior, so the app still works without any network access.
 from __future__ import annotations
 
 import json
+import math
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -55,21 +57,66 @@ _CHAT_PAYLOAD: dict[str, dict] = {
     "https://qwen.ai.unturf.com": {"chat_template_kwargs": {"enable_thinking": False}},
 }
 
-# Free image endpoints: a0.dev (MarbelAI's choice) then pollinations.
+# Free image endpoints, best quality first. Pollinations returns the largest
+# free still (768px long edge) but throttles bursts with HTTP 402; a0.dev is
+# lower resolution (~672px) but reliable. When pollinations throttles, its
+# cooldown below routes the next shots straight to a0.dev instead of stalling.
 _IMAGE_ENDPOINTS = [
-    "https://api.a0.dev/assets/image",
     "https://image.pollinations.ai/prompt",
+    "https://api.a0.dev/assets/image",
 ]
 
-# Aspect -> (width, height) for the pollinations URL form.
+# endpoint -> unix time until which it should be skipped after a 402.
+_ENDPOINT_COOLDOWN: dict[str, float] = {}
+
+# Aspect -> (width, height) for the pollinations URL form, at full resolution.
+# `image_size()` scales these down to the free tier's longest-edge cap.
 _ASPECT_PX: dict[str, tuple[int, int]] = {
-    "21:9": (1280, 548),
+    "21:9": (1344, 576),
     "16:9": (1280, 720),
     "4:3": (1152, 864),
     "1:1": (1024, 1024),
     "3:4": (864, 1152),
     "9:16": (720, 1280),
 }
+
+# Quality tags appended to every image prompt. The free models default to a
+# flat, illustration-like look, which reads as "AI slop" in motion; naming
+# photographic specifics (lens, film, light, depth of field) is what pulls the
+# output toward something that looks like real footage.
+REALISM_TAGS = (
+    "photorealistic, ultra detailed, natural lighting, shot on 35mm film, "
+    "50mm lens, shallow depth of field, subtle film grain, cinematic color grading, "
+    "sharp focus on the subject, high dynamic range"
+)
+
+_NEGATIVE_HINTS = "no text, no watermark, no logo, no caption"
+
+
+def image_size(aspect: str, max_edge: int | None = None) -> tuple[int, int]:
+    """Dimensions honouring the free tier's longest-edge cap, rounded to /16.
+
+    Requesting 1280x720 from the keyless tier fails outright, so the aspect's
+    full-resolution size is scaled down to `max_edge` on its long side.
+    """
+    width, height = _ASPECT_PX.get(aspect, _ASPECT_PX["16:9"])
+    cap = max_edge or config.FREE_AI_IMAGE_MAX_EDGE
+    longest = max(width, height)
+    if cap and longest > cap:
+        factor = cap / longest
+        width, height = width * factor, height * factor
+    snap = lambda v: max(16, int(math.floor(v / 16.0) * 16) or 16)  # noqa: E731
+    return snap(width), snap(height)
+
+
+def realism_prompt(prompt: str, *, aspect: str = "16:9") -> str:
+    """Wrap a scene prompt in photographic quality tags, avoiding duplicates."""
+    base = (prompt or "").strip().rstrip(".")
+    low = base.lower()
+    tags = [t for t in REALISM_TAGS.split(", ") if t.split()[0] not in low]
+    if aspect in ("9:16", "3:4"):
+        tags.append("vertical composition")
+    return ", ".join([base] + tags)
 
 
 class FreeAIError(RuntimeError):
@@ -118,6 +165,41 @@ def _read(url: str, *, data: bytes | None = None, headers: dict | None = None,
     req = urllib.request.Request(url, data=data, headers=headers or {}, method="POST" if data else "GET")
     with urllib.request.urlopen(req, timeout=timeout or config.FREE_AI_TIMEOUT) as resp:
         return resp.read()
+
+
+def _fetch_image_with_retry(url: str) -> bytes:
+    """GET an image, honouring the free tier's 402 rate limit.
+
+    The keyless image tier answers `402 Payment Required` when requests come
+    too fast. That is a throttle, not a hard failure, so wait and retry before
+    giving up on the endpoint.
+    """
+    attempts = max(1, config.FREE_AI_IMAGE_RETRIES + 1)
+    last: Exception | None = None
+    for i in range(attempts):
+        try:
+            return _read(url, headers={"User-Agent": "ai-video-maker/1.0"})
+        except urllib.error.HTTPError as exc:
+            last = exc
+            if exc.code == 402 and i < attempts - 1:
+                time.sleep(config.FREE_AI_IMAGE_BACKOFF * (i + 1))
+                continue
+            raise
+        except Exception as exc:  # noqa: BLE001 - network hiccup, retry
+            last = exc
+            if i < attempts - 1:
+                time.sleep(config.FREE_AI_IMAGE_BACKOFF * (i + 1))
+                continue
+            raise
+    raise FreeAIError(str(last) if last else "image fetch failed")
+
+
+def _endpoint_available(endpoint: str) -> bool:
+    return time.time() >= _ENDPOINT_COOLDOWN.get(endpoint, 0.0)
+
+
+def _throttle_endpoint(endpoint: str) -> None:
+    _ENDPOINT_COOLDOWN[endpoint] = time.time() + config.FREE_AI_IMAGE_COOLDOWN
 
 
 def chat(messages: list[dict], model: str | None = None) -> ChatResult:
@@ -179,8 +261,24 @@ def enhance_prompt(user_prompt: str, *, model: str | None = None) -> str:
         return user_prompt
 
 
-def generate_image(prompt: str, dest: str, *, aspect: str = "1:1", seed: int | None = None) -> ImageResult:
+def generate_image(prompt: str, dest: str, *, aspect: str = "16:9", seed: int | None = None,
+                   realistic: bool | None = None) -> ImageResult:
     """Fetch a free AI image for the prompt and save it to disk.
+
+    The prompt is wrapped in photographic quality tags (unless `realistic=False`
+    or `config.REALISM` is disabled) and the requested size is clamped to the free
+    tier's cap, so the returned still actually looks like footage rather than a
+    flat illustration.
+    """
+    from pathlib import Path
+
+    use_realism = config.REALISM if realistic is None else realistic
+    request_prompt = realism_prompt(prompt, aspect=aspect) if use_realism else prompt
+    """Fetch a free AI image for the prompt and save it to disk.
+
+    The prompt is wrapped in photographic quality tags (unless `realistic=False`)
+    and the requested size is clamped to the free tier's cap, so the returned
+    still actually looks like footage rather than a flat illustration.
 
     The extension of the returned path reflects the real image format, since
     the free endpoints may answer with PNG, JPEG or WEBP regardless of the
@@ -188,26 +286,38 @@ def generate_image(prompt: str, dest: str, *, aspect: str = "1:1", seed: int | N
     """
     from pathlib import Path
 
+    request_prompt = realism_prompt(prompt, aspect=aspect) if realistic else prompt
     errors: list[str] = []
-    for endpoint in _IMAGE_ENDPOINTS:
+    endpoints = [e for e in _IMAGE_ENDPOINTS if _endpoint_available(e)] or list(_IMAGE_ENDPOINTS)
+    for endpoint in endpoints:
         try:
             if endpoint.endswith("/image"):  # a0.dev
-                query = urllib.parse.urlencode({"text": prompt, "aspect": aspect, "seed": seed or 0})
+                query = urllib.parse.urlencode(
+                    {"text": request_prompt + ", " + _NEGATIVE_HINTS,
+                     "aspect": aspect, "seed": seed or 0}
+                )
                 url = f"{endpoint}?{query}"
             else:  # pollinations
-                width, height = _ASPECT_PX.get(aspect, _ASPECT_PX["1:1"])
+                width, height = image_size(aspect)
                 url = (
                     endpoint.rstrip("/")
                     + "/"
-                    + urllib.parse.quote(prompt)
-                    + f"?width={width}&height={height}&nologo=true&seed={seed or 0}"
+                    + urllib.parse.quote(request_prompt)
+                    + f"?width={width}&height={height}&nologo=true&nofeed=true&seed={seed or 0}"
                 )
-            raw = _read(url)
+            raw = _fetch_image_with_retry(url)
             if not raw:
                 raise FreeAIError("empty image response")
             path = Path(dest).with_suffix(_sniff_ext(raw))
             path.write_bytes(raw)
             return ImageResult(path=str(path), provider=endpoint)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 402:
+                _throttle_endpoint(endpoint)
+            errors.append(f"{endpoint} -> {exc}")
         except Exception as exc:  # noqa: BLE001 - try the next endpoint
             errors.append(f"{endpoint} -> {exc}")
+        finally:
+            if config.FREE_AI_IMAGE_DELAY > 0:
+                time.sleep(config.FREE_AI_IMAGE_DELAY)
     raise FreeAIError("all image providers failed: " + " | ".join(errors))

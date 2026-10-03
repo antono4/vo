@@ -118,6 +118,35 @@ def test_camera_filter_moves_differ_between_cameras():
     assert push != pan != crane
 
 
+def test_camera_filter_eases_the_move():
+    # A linear ramp reads as a mechanical zoom; the move must be eased.
+    out = omni.camera_filter("slow push-in", 1280, 720, 24)
+    assert "3-2*" in out  # smoothstep polynomial
+    assert "0.10*" in out  # ~10% travel
+
+
+def test_grade_filters_are_photographic():
+    grade = omni._grade_filters()
+    joined = ",".join(grade)
+    assert "curves=preset=medium_contrast" in joined
+    assert "unsharp=" in joined
+    assert "noise=" in joined
+    assert "vignette=" in joined
+
+
+def test_grade_can_be_disabled(monkeypatch):
+    monkeypatch.setattr(config, "REALISM", False)
+    joined = ",".join(omni._grade_filters())
+    assert "curves" not in joined and "noise" not in joined
+
+
+def test_xfade_transition_varies_and_stays_soft():
+    seen = {omni._xfade_transition(i) for i in range(5)}
+    assert len(seen) == 5
+    # Hard wipes (e.g. wipeup) would look like a slideshow.
+    assert all(t in {"fade", "dissolve", "smoothleft", "fadeblack", "smoothright"} for t in seen)
+
+
 def test_ambient_audio_gates_beats_with_gt():
     # `(t>b)` is rejected by ffmpeg's eval parser; `gt(t,b)` is required.
     out = omni.ambient_audio_filter(10, 4.6)
@@ -142,7 +171,8 @@ def test_build_command_has_one_xfade_per_join():
         title="T", subtitle="S", watermark="W",
     )
     graph = cmd[cmd.index("-filter_complex") + 1]
-    assert graph.count("xfade=transition=fade") == 2  # 3 shots -> 2 joins
+    assert graph.count("xfade=transition=") == 2  # 3 shots -> 2 joins
+    assert "xfade=transition=dissolve" in graph  # first join is a soft dissolve
     assert "-map" in cmd and "[aout]" in cmd
 
 

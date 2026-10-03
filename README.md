@@ -72,11 +72,30 @@ Engine `omni` membuat video yang benar-benar bergerak, bukan satu gambar diam:
    heuristik tetap dipakai.
 2. **Satu gambar AI per shot** — dibuat lewat provider gratis yang sama.
 3. **Gerakan kamera per shot** — push-in, pan, crane, pull-back, handheld
-   drift, orbit; semuanya berbeda agar terasa seperti potongan sinematik.
+   drift, orbit; semuanya berbeda dan **di-ease** (mulai/berhenti halus,
+   bukan zoom mekanis) agar terasa seperti operator kamera sungguhan.
 4. **Crossfade** antar shot (`OMNI_XFADE_SECONDS`, default 0.8s) dan
    **audio ambient** (nada rendah + noise + downbeat tepat di setiap cut).
 
 Durasi total tetap presisi: `n·seg − (n−1)·xfade = durasi`.
+
+### Tampilan realistis (photographic look)
+
+Tiga hal membuat hasilnya terbaca sebagai rekaman kamera, bukan slide AI:
+
+1. **Prompt fotoreal** — setiap prompt shot dibungkus tag fotografis
+   (`photorealistic, shot on 35mm film, 50mm lens, shallow depth of field,
+   subtle film grain, cinematic color grading`) di `free_ai.realism_prompt()`.
+   Instruksi storyboard juga meminta deskripsi seperti footage live-action.
+2. **Resolusi sumber maksimum** — tier gambar gratis dibatasi 768px pada sisi
+   panjang (permintaan 1280×720 justru ditolak HTTP 402). Ukuran diminta
+   otomatis di-clamp ke batas ini, lalu di-upscale Lanczos 2× saat render.
+3. **Grade film** — tiap shot diberi kurva kontras sedang, local contrast
+   (`unsharp`), *grain* halus, sedikit *temporal blend* (`tmix`) dan vignette
+   lembut (`renderer.grade_filters()`), lalu di-encode `crf 19` preset `medium`.
+
+Atur dengan `REALISM=0` (matikan) dan `REALISM_GRAIN`, `REALISM_VIGNETTE`,
+`REALISM_SHARPEN`, `REALISM_TEMPORAL`, `REALISM_UPSCALE`.
 
 ### Kemampuan AI gratis (dari MarbelAIv2.1)
 
@@ -94,8 +113,15 @@ OpenAI-compatible gratis yang **tidak butuh API key** — untuk dua hal:
 
 Provider dicoba berurutan (failover): `hermes.ai.unturf.com`,
 `qwen.ai.unturf.com`, `text.pollinations.ai`, `api.free.ai`. Model yang
-tersedia: `qwen3.8-27b` (default), `gpt-oss-20b`, `qwen3-8b`. Gambar diambil
-dari `api.a0.dev` lalu `image.pollinations.ai`.
+tersedia: `qwen3.8-27b` (default), `gpt-oss-20b`, `qwen3-8b`.
+
+Gambar diambil dari `image.pollinations.ai` (resolusi gratis tertinggi, 768px
+sisi panjang) lalu `api.a0.dev` sebagai cadangan. Endpoint gratis mudah kena
+**HTTP 402 (rate limit)**; aplikasi menunggu dan mencoba ulang, lalu menaruh
+endpoint yang ter-throttle ke *cooldown* (`FREE_AI_IMAGE_COOLDOWN`, default
+25s) sehingga shot berikutnya langsung memakai endpoint cadangan alih-alih
+macet. Ukuran yang diminta selalu di-clamp ke `FREE_AI_IMAGE_MAX_EDGE`
+(default 768).
 
 Semua langkah ini **opsional dan non-fatal**: bila jaringan mati, aplikasi
 otomatis kembali ke prompt asli + render prosedural. Matikan dengan
