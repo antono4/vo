@@ -54,10 +54,43 @@ export RENDER_ENGINE=auto
 ./run.sh
 ```
 
+### Kemampuan AI gratis (dari MarbelAIv2.1)
+
+Selain engine di atas, aplikasi ini mengadopsi pendekatan
+[**MarbelAIv2.1**](https://antono4.github.io/MarbelAIv2.1/) — provider
+OpenAI-compatible gratis yang **tidak butuh API key** — untuk dua hal:
+
+1. **Perkuat prompt** — deskripsi Anda ditulis ulang menjadi prompt video
+   bahasa Inggris yang lebih kaya (subjek, aksi, latar, cahaya, gerakan kamera).
+2. **Gambar referensi AI** — sebuah gambar nyata dibuat dari prompt, lalu
+   dianimasikan oleh renderer `ffmpeg` (efek Ken Burns). Inilah kemampuan
+   "AI image → video" tanpa kredensial.
+
+Provider dicoba berurutan (failover): `hermes.ai.unturf.com`,
+`qwen.ai.unturf.com`, `text.pollinations.ai`, `api.free.ai`. Model yang
+tersedia: `qwen3.8-27b` (default), `gpt-oss-20b`, `qwen3-8b`. Gambar diambil
+dari `api.a0.dev` lalu `image.pollinations.ai`.
+
+Semua langkah ini **opsional dan non-fatal**: bila jaringan mati, aplikasi
+otomatis kembali ke prompt asli + render prosedural. Matikan dengan
+`FREE_AI_ENABLED=0` untuk mode sepenuhnya offline.
+
+```bash
+# default: AI gratis aktif
+FREE_AI_ENABLED=1 FREE_AI_CHAT_MODEL=qwen3.8-27b ./run.sh
+FREE_AI_ENABLED=0 ./run.sh            # matikan AI gratis
+FREE_AI_TIMEOUT=30 ./run.sh           # timeout per provider (detik)
+```
+
+Di UI, centang **"AI gratis (MarbelAI)"** dan pilih modelnya. Di API, kirim
+`use_free_ai` dan `ai_model` pada `POST /api/generate`.
+
 ### Alur permintaan
 
 ```
 prompt (ID) ──► clamp durasi [4,30] ──► inferensi rasio ──► terjemah ke EN
+     │
+     ├─► [AI gratis] perkuat prompt (LLM gratis) ──► gambar referensi AI
      │
      └──► pipeline.enqueue(job) ──► worker (auto-retry 3x) ──► MP4 + branding
                                           │
@@ -137,10 +170,12 @@ app/
   pipeline.py       bookkeeping job (port dari scripts/pipeline_tracker.py)
   jobs.py           worker background + auto-retry
   ai_provider.py    adapter opsional ke BytePlus ModelArk (Seedance 2.5)
+  free_ai.py        kemampuan AI gratis dari MarbelAIv2.1 (chat + gambar, failover)
   main.py           aplikasi FastAPI + endpoint
 static/             UI (HTML/CSS/JS, Bahasa Indonesia)
 data/outputs/       MP4 hasil
 data/uploads/       gambar referensi
+tests/              pengujian (kebijakan, pipeline, render, AI gratis)
 ```
 
 ---
