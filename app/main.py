@@ -63,7 +63,7 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=2000)
     duration: int = config.DURATION_DEFAULT
     ratio: str | None = None
-    count: int = Field(1, ge=1, le=4)
+    count: int = Field(1, ge=1, le=config.MAX_COUNT)
     images: list[str] = Field(default_factory=list)
     use_ai: bool = False
     use_free_ai: bool = True
@@ -104,7 +104,7 @@ def meta() -> dict:
         },
         "ratios": config.SUPPORTED_RATIOS,
         "default_ratio": config.DEFAULT_RATIO,
-        "max_count": 4,
+        "max_count": config.MAX_COUNT,
         "modes": ["text_to_video", "image_to_video"],
         "free_ai": {
             "enabled": free_ai.enabled(),

@@ -106,7 +106,7 @@ prompt (ID) ──► clamp durasi [4,30] ──► inferensi rasio ──► te
 | `GET` | `/api/health` | Status server, model, rentang durasi, engine aktif |
 | `GET` | `/api/meta` | Rasio, durasi, mode, konfigurasi branding |
 | `POST` | `/api/upload` | Upload gambar referensi (PNG/JPG/WEBP, maks 25MB) |
-| `POST` | `/api/generate` | Buat 1–4 job generation |
+| `POST` | `/api/generate` | Buat 1–5 job generation |
 | `GET` | `/api/jobs` | Daftar semua job + ringkasan status |
 | `GET` | `/api/jobs/{id}` | Status satu job |
 | `POST` | `/api/jobs/{id}/retry` | Ulangi job yang gagal |

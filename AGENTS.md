@@ -41,6 +41,8 @@ Rendering requires system `ffmpeg` (`sudo apt-get install -y ffmpeg`).
 
 - **Duration policy:** always clamp to `[4, 30]`; the legacy 15s cap must
   never be enforced. `DURATION_MAX` is the default.
+- **Batch size:** `MAX_COUNT` (default 5, `MAX_COUNT` env override) bounds the
+  `count` field and `meta.max_count`. The frontend reads it dynamically.
 - **Branding is mandatory:** every output file uses
   `bbuchannel_[slug]_[NN].mp4`, the CTA block is returned in API responses,
   and the watermark overlay is burned into the video.
