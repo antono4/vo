@@ -42,17 +42,41 @@ Buka `http://localhost:8000`.
 
 | Engine | Kapan aktif | Keterangan |
 |---|---|---|
-| `procedural` (default) | selalu | Merender video animasi nyata via `ffmpeg` — deterministik dari prompt, bekerja offline. |
+| `classic` | dipilih manual | 1 gambar AI + efek Ken Burns + judul/watermark. Engine awal. |
+| `omni` (default) | selalu (butuh AI gratis aktif) | **Omni-lite**: beberapa gambar AI (1 per shot), gerakan kamera berbeda per shot, crossfade, audio ambient dengan downbeat di setiap cut. Gratis, tanpa API key. |
+| `gemini` | `GEMINI_API_KEY` di-set | **Gemini Omni Flash asli** (`gemini-omni-1.1-flash`) — text-to-video & image-to-video dengan audio. |
+| `auto` | — | `gemini` bila key tersedia, selain itu `omni`. |
 | `ModelArk` | `MODELARK_API_KEY` di-set **dan** `RENDER_ENGINE=auto` | Mengarahkan generation ke model Seedance 2.5 asli. |
 
 Aplikasi tetap berfungsi penuh tanpa API key apa pun. Untuk memakai model AI
 asli:
 
 ```bash
-export MODELARK_API_KEY=...          # BytePlus ModelArk
+export MODELARK_API_KEY=...          # BytePlus ModelArk (Seedance 2.5)
 export RENDER_ENGINE=auto
 ./run.sh
 ```
+
+```bash
+export GEMINI_API_KEY=...            # Google AI Studio (Gemini Omni Flash)
+./run.sh                             # engine default jadi 'gemini'
+```
+
+### Engine Omni-lite (multi-shot, gratis)
+
+Engine `omni` membuat video yang benar-benar bergerak, bukan satu gambar diam:
+
+1. **Storyboard** — ide Anda dipecah otomatis menjadi beberapa shot
+   (`OMNI_SCENE_SECONDS`, default 5 detik/shot, maks `OMNI_MAX_SCENES` = 6).
+   LLM gratis menulis deskripsi tiap shot; bila jaringan mati, pemecahan
+   heuristik tetap dipakai.
+2. **Satu gambar AI per shot** — dibuat lewat provider gratis yang sama.
+3. **Gerakan kamera per shot** — push-in, pan, crane, pull-back, handheld
+   drift, orbit; semuanya berbeda agar terasa seperti potongan sinematik.
+4. **Crossfade** antar shot (`OMNI_XFADE_SECONDS`, default 0.8s) dan
+   **audio ambient** (nada rendah + noise + downbeat tepat di setiap cut).
+
+Durasi total tetap presisi: `n·seg − (n−1)·xfade = durasi`.
 
 ### Kemampuan AI gratis (dari MarbelAIv2.1)
 
@@ -62,8 +86,10 @@ OpenAI-compatible gratis yang **tidak butuh API key** — untuk dua hal:
 
 1. **Perkuat prompt** — deskripsi Anda ditulis ulang menjadi prompt video
    bahasa Inggris yang lebih kaya (subjek, aksi, latar, cahaya, gerakan kamera).
-2. **Gambar referensi AI** — sebuah gambar nyata dibuat dari prompt, lalu
-   dianimasikan oleh renderer `ffmpeg` (efek Ken Burns). Inilah kemampuan
+2. **Storyboard** — ide dipecah menjadi beberapa shot dengan deskripsi dan
+   gerakan kamera masing-masing.
+3. **Gambar AI per shot** — gambar nyata dibuat untuk tiap shot, lalu dirangkai
+   oleh engine `omni` (gerakan kamera + crossfade + audio). Inilah kemampuan
    "AI image → video" tanpa kredensial.
 
 Provider dicoba berurutan (failover): `hermes.ai.unturf.com`,
@@ -119,8 +145,11 @@ prompt (ID) ──► clamp durasi [4,30] ──► inferensi rasio ──► te
 ```bash
 curl -X POST http://localhost:8000/api/generate \
   -H "Content-Type: application/json" \
-  -d '{"prompt":"kucing berlari di pantai saat senja, video tiktok","duration":60,"count":2}'
+  -d '{"prompt":"kucing berlari di pantai saat senja, video tiktok","duration":60,"count":2,"engine":"omni"}'
 ```
+
+`engine` menerima `classic`, `omni`, `gemini`, atau `auto`. Bila dikosongkan,
+`meta.default_engine` yang dipakai.
 
 ```json
 {
@@ -166,7 +195,10 @@ Didukung: `21:9, 16:9, 4:3, 1:1, 3:4, 9:16`.
 app/
   config.py         konfigurasi + kebijakan skill (model, durasi, rasio, branding)
   prompt_utils.py   clamp durasi, inferensi rasio, terjemah prompt, slug
-  renderer.py       mesin render ffmpeg (text_to_video & image_to_video)
+  renderer.py       mesin render ffmpeg "classic" (1 gambar + Ken Burns)
+  omni.py           mesin render multi-shot "Omni-lite" (shot, kamera, xfade, audio)
+  scenes.py         perencanaan storyboard (LLM gratis + fallback heuristik)
+  gemini_omni.py    adapter Gemini Omni Flash asli (butuh GEMINI_API_KEY)
   pipeline.py       bookkeeping job (port dari scripts/pipeline_tracker.py)
   jobs.py           worker background + auto-retry
   ai_provider.py    adapter opsional ke BytePlus ModelArk (Seedance 2.5)
