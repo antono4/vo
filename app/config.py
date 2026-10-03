@@ -98,3 +98,28 @@ FREE_AI_CHAT_UPSTREAMS = [
 ]
 FREE_AI_MODELS = ["qwen3.8-27b", "gpt-oss-20b", "qwen3-8b"]
 FREE_AI_IMAGE_ASPECT = os.getenv("FREE_AI_IMAGE_ASPECT", "1:1")
+
+# --- Generation engine ---
+# 'classic'  : one AI image + Ken Burns + title/watermark (the original engine)
+# 'omni'     : multi-scene "Omni-lite" — several AI images, per-shot camera
+#              motion, crossfades and a synchronized ambient audio bed
+# 'gemini'   : real Gemini Omni Flash (gemini-omni-1.1-flash) via GEMINI_API_KEY
+# 'auto'     : gemini when a key is present, otherwise omni
+ENGINES = ["classic", "omni", "gemini"]
+DEFAULT_ENGINE = os.getenv("DEFAULT_ENGINE", "omni")
+
+# --- Omni-lite engine tuning ---
+OMNI_SCENE_SECONDS = int(os.getenv("OMNI_SCENE_SECONDS", "5"))
+OMNI_MAX_SCENES = int(os.getenv("OMNI_MAX_SCENES", "6"))
+OMNI_XFADE_SECONDS = float(os.getenv("OMNI_XFADE_SECONDS", "0.8"))
+OMNI_TITLE_SECONDS = float(os.getenv("OMNI_TITLE_SECONDS", "3.0"))
+
+# --- Real Gemini Omni Flash provider (https://ai.google.dev/gemini-api/docs/omni) ---
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_BASE = os.getenv(
+    "GEMINI_API_BASE", "https://generativelanguage.googleapis.com/v1beta"
+)
+GEMINI_OMNI_MODEL = os.getenv("GEMINI_OMNI_MODEL", "gemini-omni-1.1-flash")
+GEMINI_OMNI_RESOLUTION = os.getenv("GEMINI_OMNI_RESOLUTION", "1080p")
+GEMINI_OMNI_POLL_SECONDS = int(os.getenv("GEMINI_OMNI_POLL_SECONDS", "10"))
+GEMINI_OMNI_TIMEOUT = int(os.getenv("GEMINI_OMNI_TIMEOUT", "600"))

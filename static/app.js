@@ -8,6 +8,7 @@
     count: 1,
     images: [], // {url, name}
     polling: new Set(),
+    engine: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -22,10 +23,13 @@
 
     $("badge-model").textContent = `model: ${meta.model_version}`;
     const engine = $("badge-engine");
-    engine.textContent = health.ai_provider_available
-      ? "engine: ModelArk (AI asli)"
-      : `engine: ${health.render_engine}`;
-    engine.classList.add(health.ai_provider_available ? "ok" : "warn");
+    if (health.gemini_omni && health.gemini_omni.available) {
+      engine.textContent = "engine: Gemini Omni";
+      engine.classList.add("ok");
+    } else {
+      engine.textContent = `engine: ${meta.default_engine || health.render_engine} (gratis)`;
+      engine.classList.add("warn");
+    }
 
     const aiToggle = $("use-ai");
     aiToggle.disabled = !health.ai_provider_available;
@@ -49,8 +53,42 @@
     $("cta").textContent = meta.branding.cta;
     renderRatioChips(meta.ratios, meta.default_ratio);
     renderCountChips(meta.max_count);
+    renderEngineChips(meta, health);
     bindEvents();
     refreshJobs();
+  }
+
+  function renderEngineChips(meta, health) {
+    const engines = meta.engines || ["classic", "omni", "gemini"];
+    const notes = meta.engine_notes || {};
+    const geminiOk = !!(health.gemini_omni && health.gemini_omni.available);
+    state.engine = meta.default_engine || "omni";
+    const wrap = $("engine-chips");
+    wrap.innerHTML = "";
+    engines.forEach((name) => {
+      const chip = document.createElement("div");
+      chip.className = "chip" + (name === state.engine ? " active" : "");
+      if (name === "gemini" && !geminiOk) chip.classList.add("disabled");
+      const label = name === "omni" ? "omni-lite (gratis)" : name;
+      chip.textContent = label + (name === "gemini" && !geminiOk ? " 🔒" : "");
+      chip.addEventListener("click", () => {
+        if (name === "gemini" && !geminiOk) return;
+        state.engine = name;
+        [...wrap.children].forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active");
+        updateEngineHint(notes, name);
+      });
+      wrap.appendChild(chip);
+    });
+    updateEngineHint(notes, state.engine);
+  }
+
+  function updateEngineHint(notes, name) {
+    const base = notes[name] || "";
+    const geminiNote = name === "gemini"
+      ? " Butuh GEMINI_API_KEY; tanpa key otomatis pakai omni-lite."
+      : "";
+    $("engine-hint").textContent = base + geminiNote;
   }
 
   function renderRatioChips(ratios, defaultRatio) {
@@ -192,6 +230,7 @@
       use_ai: $("use-ai").checked,
       use_free_ai: $("use-free-ai") ? $("use-free-ai").checked : false,
       ai_model: state.freeAiModel || null,
+      engine: state.engine || null,
     };
 
     try {
@@ -276,6 +315,8 @@
             <span class="tag">${job.duration_clamped}s</span>
             <span class="tag">${job.ratio}</span>
             <span class="tag">${job.mode}</span>
+            ${job.engine ? `<span class="tag">${job.engine}</span>` : ""}
+            ${job.scene_count ? `<span class="tag">${job.scene_count} shot</span>` : ""}
           </div>
           <div class="card-actions">
             <a href="${job.url}" download="${filename}">⬇ Unduh</a>

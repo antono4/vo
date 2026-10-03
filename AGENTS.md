@@ -32,6 +32,11 @@ Rendering requires system `ffmpeg` (`sudo apt-get install -y ffmpeg`).
   `scripts/pipeline_tracker.py`).
 - `app/jobs.py` — background worker + auto-retry.
 - `app/ai_provider.py` — optional BytePlus ModelArk (Seedance 2.5) adapter.
+- `app/scenes.py` — storyboard planner for the omni engine. Free LLM splits the
+  idea into shots; `heuristic_plan()` is the offline fallback.
+- `app/omni.py` — multi-shot renderer: per-shot camera move, xfade chain and a
+  synthesized ambient bed with a downbeat on each cut. `build_command()` is pure.
+- `app/gemini_omni.py` — real Gemini Omni Flash adapter (`GEMINI_API_KEY`).
 - `app/free_ai.py` — keyless free AI ported from MarbelAIv2.1: multi-provider
   chat (prompt enhancement) and free image generation, with sequential
   failover. All calls are best-effort and degrade to offline behavior.
@@ -51,6 +56,18 @@ Rendering requires system `ffmpeg` (`sudo apt-get install -y ffmpeg`).
   runs.
 - ffmpeg's `drawtext` requires `textfile=` with the text written to disk
   (escaping inline text with special characters is brittle).
+- **ffmpeg filter gotchas (learned the hard way):**
+  - `zoompan` has no `t` variable; derive clip time from `on/fps`.
+  - The eval parser rejects `(t>1)`; use `gt(t,1)`. Ungated `exp(-k*(t-b))`
+    explodes for `t < b`, so gate every beat term.
+  - A filter with no inputs (e.g. `sine`) must not be prefixed with a link
+    label; emit one output label per chain.
+- **Engines:** `classic` (1 image + Ken Burns), `omni` (multi-shot, default),
+  `gemini` (real Gemini Omni Flash, needs `GEMINI_API_KEY`), `auto`.
+  `jobs.resolve_engine()` degrades `gemini`/`auto` to `omni` without a key so
+  the reported engine always matches the one that ran.
+- **Omni duration maths:** `n` shots of `seg` overlapped by `xfade` must satisfy
+  `n*seg - (n-1)*xfade == duration` (`omni.segment_geometry`).
 - Long renders (30s @ 1080p) take ~40s; the frontend polls `/api/jobs/{id}`.
 - **Free AI is optional:** `FREE_AI_ENABLED=0` forces offline mode. Network
   failures must never fail a job — `jobs._prepare_prompt()` catches them and

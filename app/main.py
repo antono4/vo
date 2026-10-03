@@ -18,7 +18,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import ai_provider, config, free_ai, jobs, pipeline, prompt_utils
+from . import (ai_provider, config, free_ai, gemini_omni, jobs, pipeline,
+               prompt_utils, scenes)
 
 
 def _recover_interrupted_jobs() -> None:
@@ -39,6 +40,7 @@ def _recover_interrupted_jobs() -> None:
             image_urls=job.get("image_urls"),
             use_free_ai=job.get("use_free_ai", True),
             ai_model=job.get("ai_model"),
+            engine=job.get("engine"),
         )
 
 
@@ -68,6 +70,7 @@ class GenerateRequest(BaseModel):
     use_ai: bool = False
     use_free_ai: bool = True
     ai_model: str | None = None
+    engine: str | None = None
     title: str | None = None
 
 
@@ -79,6 +82,13 @@ def health() -> dict:
         "duration_range": [config.DURATION_MIN, config.DURATION_MAX],
         "legacy_tool_cap": config.LEGACY_TOOL_CAP,
         "render_engine": config.RENDER_ENGINE,
+        "default_engine": config.DEFAULT_ENGINE,
+        "engines": config.ENGINES,
+        "gemini_omni": {
+            "available": gemini_omni.available(),
+            "model": config.GEMINI_OMNI_MODEL,
+            "resolution": config.GEMINI_OMNI_RESOLUTION,
+        },
         "ai_provider_available": ai_provider.available(),
         "free_ai": {
             "enabled": free_ai.enabled(),
@@ -106,6 +116,19 @@ def meta() -> dict:
         "default_ratio": config.DEFAULT_RATIO,
         "max_count": config.MAX_COUNT,
         "modes": ["text_to_video", "image_to_video"],
+        "engines": config.ENGINES,
+        "default_engine": config.DEFAULT_ENGINE,
+        "engine_notes": {
+            "classic": "1 gambar AI + Ken Burns + judul/watermark (engine lama)",
+            "omni": "Multi-shot Omni-lite: beberapa gambar AI, gerakan kamera "
+                    "per-shot, crossfade, audio ambient tersinkron (gratis, keyless)",
+            "gemini": "Gemini Omni Flash asli (butuh GEMINI_API_KEY)",
+        },
+        "omni": {
+            "scene_seconds": config.OMNI_SCENE_SECONDS,
+            "max_scenes": config.OMNI_MAX_SCENES,
+            "xfade_seconds": config.OMNI_XFADE_SECONDS,
+        },
         "free_ai": {
             "enabled": free_ai.enabled(),
             "default_model": config.FREE_AI_CHAT_MODEL,
@@ -165,6 +188,7 @@ def generate(req: GenerateRequest) -> JSONResponse:
             jid,
             use_free_ai=req.use_free_ai,
             ai_model=req.ai_model or config.FREE_AI_CHAT_MODEL,
+            engine=jobs.resolve_engine(req.engine),
         )
         image_path = None
         if req.images:
@@ -181,6 +205,7 @@ def generate(req: GenerateRequest) -> JSONResponse:
             use_ai=req.use_ai,
             use_free_ai=req.use_free_ai,
             ai_model=req.ai_model,
+            engine=req.engine,
         )
         created.append({"job_id": jid, "filename": filename, "mode": mode})
 
@@ -191,6 +216,7 @@ def generate(req: GenerateRequest) -> JSONResponse:
             "duration_requested": req.duration,
             "ratio": ratio,
             "mode": mode,
+            "engine": jobs.resolve_engine(req.engine),
             "english_prompt": english_prompt,
             "notes": [note] if note else [],
             "cta": config.BBU["cta"],
@@ -233,6 +259,7 @@ def retry_job(job_id: str) -> dict:
         image_urls=job.get("image_urls"),
         use_free_ai=job.get("use_free_ai", True),
         ai_model=job.get("ai_model"),
+        engine=job.get("engine"),
     )
     return {"job_id": job_id, "status": "pending"}
 

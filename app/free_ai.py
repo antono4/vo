@@ -61,6 +61,16 @@ _IMAGE_ENDPOINTS = [
     "https://image.pollinations.ai/prompt",
 ]
 
+# Aspect -> (width, height) for the pollinations URL form.
+_ASPECT_PX: dict[str, tuple[int, int]] = {
+    "21:9": (1280, 548),
+    "16:9": (1280, 720),
+    "4:3": (1152, 864),
+    "1:1": (1024, 1024),
+    "3:4": (864, 1152),
+    "9:16": (720, 1280),
+}
+
 
 class FreeAIError(RuntimeError):
     pass
@@ -185,11 +195,12 @@ def generate_image(prompt: str, dest: str, *, aspect: str = "1:1", seed: int | N
                 query = urllib.parse.urlencode({"text": prompt, "aspect": aspect, "seed": seed or 0})
                 url = f"{endpoint}?{query}"
             else:  # pollinations
+                width, height = _ASPECT_PX.get(aspect, _ASPECT_PX["1:1"])
                 url = (
                     endpoint.rstrip("/")
                     + "/"
                     + urllib.parse.quote(prompt)
-                    + "?width=1024&height=1024&nologo=true"
+                    + f"?width={width}&height={height}&nologo=true&seed={seed or 0}"
                 )
             raw = _read(url)
             if not raw:
