@@ -79,6 +79,19 @@ class ImageResult:
     provider: str
 
 
+def _sniff_ext(raw: bytes) -> str:
+    """Pick the real image extension from magic bytes (free endpoints vary)."""
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if raw[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return ".webp"
+    if raw[:3] == b"GIF":
+        return ".gif"
+    return ".png"
+
+
 def enabled() -> bool:
     return config.FREE_AI_ENABLED
 
@@ -157,7 +170,14 @@ def enhance_prompt(user_prompt: str, *, model: str | None = None) -> str:
 
 
 def generate_image(prompt: str, dest: str, *, aspect: str = "1:1", seed: int | None = None) -> ImageResult:
-    """Fetch a free AI image for the prompt and save it to `dest` (PNG)."""
+    """Fetch a free AI image for the prompt and save it to disk.
+
+    The extension of the returned path reflects the real image format, since
+    the free endpoints may answer with PNG, JPEG or WEBP regardless of the
+    requested name.
+    """
+    from pathlib import Path
+
     errors: list[str] = []
     for endpoint in _IMAGE_ENDPOINTS:
         try:
@@ -174,10 +194,9 @@ def generate_image(prompt: str, dest: str, *, aspect: str = "1:1", seed: int | N
             raw = _read(url)
             if not raw:
                 raise FreeAIError("empty image response")
-            from pathlib import Path
-
-            Path(dest).write_bytes(raw)
-            return ImageResult(path=dest, provider=endpoint)
+            path = Path(dest).with_suffix(_sniff_ext(raw))
+            path.write_bytes(raw)
+            return ImageResult(path=str(path), provider=endpoint)
         except Exception as exc:  # noqa: BLE001 - try the next endpoint
             errors.append(f"{endpoint} -> {exc}")
     raise FreeAIError("all image providers failed: " + " | ".join(errors))

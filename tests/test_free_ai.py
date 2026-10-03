@@ -109,6 +109,20 @@ def test_generate_image_failover(monkeypatch, tmp_path):
     assert "pollinations" in result.provider
 
 
+def test_sniff_ext_from_magic_bytes():
+    assert free_ai._sniff_ext(b"\x89PNG\r\n\x1a\nrest") == ".png"
+    assert free_ai._sniff_ext(b"\xff\xd8\xff\xe0rest") == ".jpg"
+    assert free_ai._sniff_ext(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == ".webp"
+    assert free_ai._sniff_ext(b"GIF89a") == ".gif"
+
+
+def test_generate_image_uses_real_extension(monkeypatch, tmp_path):
+    monkeypatch.setattr(free_ai, "_read", lambda *a, **k: b"RIFF\x00\x00\x00\x00WEBPVP8 x")
+    result = free_ai.generate_image("a cat", str(tmp_path / "img.png"))
+    assert result.path.endswith(".webp")
+    assert Path(result.path).read_bytes().startswith(b"RIFF")
+
+
 def test_prepare_prompt_enhances_and_fetches_image(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "FREE_AI_ENABLED", True)
     monkeypatch.setattr(config, "UPLOAD_DIR", tmp_path)
